@@ -22,8 +22,7 @@ public class RendererPatch {
     }
 
     public static Material CreateMaterial(Renderer _) {
-#pragma warning disable CS0618 // Type or member is obsolete
-        return new Material("");
-#pragma warning restore CS0618 // Type or member is obsolete
+        // Material(string) is now a hard error; the shader-based ctor is the supported form.
+        return new Material((Shader) null!);
     }
 }

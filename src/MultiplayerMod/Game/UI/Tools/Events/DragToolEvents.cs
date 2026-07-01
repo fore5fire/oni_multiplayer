@@ -98,7 +98,7 @@ public static class DragToolEvents {
                 cursorUp,
                 ToolMenu.Instance.PriorityScreen.GetLastSelectedPriority(),
                 instance switch {
-                    FilteredDragTool filtered => GetActiveParameters(filtered.currentFilterTargets),
+                    FilteredDragTool filtered => GetActiveParameters(filtered.currentFilters),
                     HarvestTool harvest => GetActiveParameters(harvest.options),
                     _ => null
                 }
@@ -110,8 +110,8 @@ public static class DragToolEvents {
             lastTool = null;
         }
 
-        private static string[] GetActiveParameters(Dictionary<string, ToolParameterMenu.ToggleState> parameters) {
-            return parameters.Where(it => it.Value == ToolParameterMenu.ToggleState.On).Select(it => it.Key).ToArray();
+        private static string[] GetActiveParameters(ToolParameterMenu.ToggleData[] parameters) {
+            return parameters.Where(it => it.state == ToolParameterMenu.ToggleState.On).Select(it => it.name).ToArray();
         }
     }
 

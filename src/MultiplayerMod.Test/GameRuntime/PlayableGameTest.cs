@@ -76,7 +76,7 @@ public abstract class PlayableGameTest {
         NameDisplayScreen.Instance = null;
         BuildingConfigManager.Instance = null;
         CustomGameSettings.instance = null;
-        GameComps.InfraredVisualizers = null;
+        GameComps.OreSizeVisualizers = null;
         GameScreenManager.Instance = null;
         GameScenePartitioner.instance = null;
 
@@ -134,10 +134,16 @@ public abstract class PlayableGameTest {
         worldGameObject.AddComponent<BuildingConfigManager>().Awake();
         SetupAssets(worldGameObject);
         worldGameObject.AddComponent<CustomGameSettings>().Awake();
-        GameComps.InfraredVisualizers = new InfraredVisualizerComponents();
+        GameComps.OreSizeVisualizers = new OreSizeVisualizerComponents();
         GameScreenManager.Instance = new GameScreenManager();
         GameScreenManager.Instance.worldSpaceCanvas = new GameObject();
     }
+
+    // TextAsset gained a ReadOnlySpan<byte> ctor overload (Unity's CoreCLR runtime); that parameter type lives
+    // in System.Private.CoreLib and can't be resolved against the net48 mscorlib facade, which breaks compile-time
+    // overload resolution for `new TextAsset(string)`. Invoke the string ctor via reflection to sidestep it.
+    private static TextAsset NewTextAsset(string text) =>
+        (TextAsset) typeof(TextAsset).GetConstructor(new[] { typeof(string) })!.Invoke(new object[] { text });
 
     private static void SetupAssets(GameObject worldGameObject) {
         worldGameObject.AddComponent<BundledAssetsLoader>().Awake();
@@ -152,8 +158,8 @@ public abstract class PlayableGameTest {
         assets.TextureAtlasAssets = new List<TextureAtlas>();
         assets.BlockTileDecorInfoAssets = new List<BlockTileDecorInfo>();
         Assets.ModLoadedKAnims = new List<KAnimFile>() { ScriptableObject.CreateInstance<KAnimFile>() };
-        assets.elementAudio = new TextAsset("");
-        assets.personalitiesFile = new TextAsset(TestPersonalitiesCsv);
+        assets.elementAudio = NewTextAsset("");
+        assets.personalitiesFile = NewTextAsset(TestPersonalitiesCsv);
         Assets.instance = assets;
 
         AsyncLoadManager<IGlobalAsyncLoader>.Run();
@@ -168,8 +174,8 @@ public abstract class PlayableGameTest {
         worldGameObject.AddComponent<Global>().Awake();
 
         var game = worldGameObject.AddComponent<global::Game>();
-        game.maleNamesFile = new TextAsset("Bob");
-        game.femaleNamesFile = new TextAsset("Alisa");
+        game.maleNamesFile = NewTextAsset("Bob");
+        game.femaleNamesFile = NewTextAsset("Alisa");
         game.assignmentManager = new AssignmentManager();
         global::Game.Instance = game;
         game.obj = KObjectManager.Instance.GetOrCreateObject(game.gameObject);

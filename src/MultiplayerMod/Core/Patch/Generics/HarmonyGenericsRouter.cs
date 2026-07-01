@@ -14,14 +14,14 @@ public static class HarmonyGenericsRouter {
 
     private static readonly ConcurrentDictionary<MethodBase, MethodBase> replacements = new();
 
+    // Harmony 2.4.x removed PatchTools.RememberObject. Detours are now installed via
+    // PatchTools.DetourMethod(method, replacement); hooking it captures the same
+    // original -> replacement mapping the generic router relies on below.
     [UsedImplicitly]
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(PatchTools), nameof(PatchTools.RememberObject))]
-    private static void RememberObject(object key, object value) {
-        if (key is not MethodBase original || value is not MethodBase replacement)
-            return;
-
-        replacements[original] = replacement;
+    [HarmonyPatch(typeof(PatchTools), nameof(PatchTools.DetourMethod))]
+    private static void DetourMethod(MethodBase method, MethodBase replacement) {
+        replacements[method] = replacement;
     }
 
     /// <summary>
@@ -98,20 +98,21 @@ public static class HarmonyGenericsRouter {
                 );
             }
         } else {
-            var message = Memory.DetourMethod(targetMethod, replacement);
-            if (message != null)
-                throw new HarmonyGenericsRouterException(message);
+            // Harmony 2.4.x removed HarmonyLib.Memory; detours are installed via PatchTools.DetourMethod,
+            // which throws on failure instead of returning an error message.
+            PatchTools.DetourMethod(targetMethod, replacement);
         }
 
         return targetMethod;
     }
 
     private static MethodInfo FindSameMethod(MethodBase original, Type targetGenericType) {
-        var ptr = Memory.GetMethodStart(original, out _);
-        var method = targetGenericType.GetAllMethods()
-            .Where(it => it.Name == original.Name)
-            .First(it => Memory.GetMethodStart(it, out _) == ptr);
-        return method;
+        // A method on a different instantiation of the same generic type definition shares the
+        // metadata token (it is defined on the open generic type, not the constructed type), so
+        // (token, module) uniquely identifies the corresponding method without native-pointer probing
+        // (HarmonyLib.Memory.GetMethodStart was removed in Harmony 2.4.x).
+        return targetGenericType.GetAllMethods()
+            .First(it => it.MetadataToken == original.MetadataToken && it.Module == original.Module);
     }
 
     private static Type? FindGenericAncestor(Type type, Type genericDefinition) {

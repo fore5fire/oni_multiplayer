@@ -31,10 +31,14 @@ public abstract class AbstractDragToolCommand<T> : MultiplayerCommand where T : 
         if (tool is not FilteredDragTool filteredTool)
             return;
 
-        filteredTool.currentFilterTargets = new Dictionary<string, ToolParameterMenu.ToggleState> {
-            [ToolParameterMenu.FILTERLAYERS.ALL] = ToolParameterMenu.ToggleState.Off
+        // ONI switched filter state from Dictionary<string, ToggleState> to ToggleData[].
+        var filters = new List<ToolParameterMenu.ToggleData> {
+            new(ToolParameterMenu.FILTERLAYERS.ALL, ToolParameterMenu.ToggleState.Off, true)
         };
-        Arguments.Parameters?.ForEach(it => filteredTool.currentFilterTargets[it] = ToolParameterMenu.ToggleState.On);
+        Arguments.Parameters?.ForEach(
+            it => filters.Add(new ToolParameterMenu.ToggleData(it, ToolParameterMenu.ToggleState.On, true))
+        );
+        filteredTool.currentFilters = filters.ToArray();
     }
 
     protected virtual void InvokeTool(T tool) => Arguments.Cells.ForEach(it => tool.OnDragTool(it, 0));

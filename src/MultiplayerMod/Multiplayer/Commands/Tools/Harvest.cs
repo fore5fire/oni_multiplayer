@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using MultiplayerMod.Core.Extensions;
+using System.Linq;
 using MultiplayerMod.Game.UI.Tools.Events;
 
 namespace MultiplayerMod.Multiplayer.Commands.Tools;
@@ -12,11 +11,15 @@ public class Harvest : AbstractDragToolCommand<HarvestTool> {
 
     protected override void InitializeTool(HarvestTool tool) {
         base.InitializeTool(tool);
-        tool.options = new Dictionary<string, ToolParameterMenu.ToggleState> {
-            ["HARVEST_WHEN_READY"] = ToolParameterMenu.ToggleState.Off,
-            ["DO_NOT_HARVEST"] = ToolParameterMenu.ToggleState.Off
+        // ONI switched tool option state from Dictionary<string, ToggleState> to ToggleData[].
+        tool.options = new[] {
+            new ToolParameterMenu.ToggleData("HARVEST_WHEN_READY", ToolParameterMenu.ToggleState.Off, false),
+            new ToolParameterMenu.ToggleData("DO_NOT_HARVEST", ToolParameterMenu.ToggleState.Off, false)
         };
-        Arguments.Parameters?.ForEach(it => tool.options[it] = ToolParameterMenu.ToggleState.On);
+        for (var i = 0; i < tool.options.Length; i++) {
+            if (Arguments.Parameters?.Contains(tool.options[i].name) == true)
+                tool.options[i].state = ToolParameterMenu.ToggleState.On;
+        }
     }
 
 }
