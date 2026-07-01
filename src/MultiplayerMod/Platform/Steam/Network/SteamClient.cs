@@ -142,14 +142,21 @@ public class SteamClient : IMultiplayerClient {
         var messages = new IntPtr[128];
         var messagesCount = SteamNetworkingSockets.ReceiveMessagesOnConnection(connection, messages, 128);
         for (var i = 0; i < messagesCount; i++) {
-            var steamMessage = Marshal.PtrToStructure<SteamNetworkingMessage_t>(messages[i]);
-            var message = messageProcessor.Process(
-                steamMessage.m_conn.m_HSteamNetConnection,
-                steamMessage.GetNetworkMessageHandle()
-            );
-            if (message != null)
-                CommandReceived?.Invoke(message.Command);
-            SteamNetworkingMessage_t.Release(messages[i]);
+            // Each message is isolated: a throwing command (or processing error) must not abort the rest of the
+            // batch (ordered-delivery loss => divergence), and the native message must always be released.
+            try {
+                var steamMessage = Marshal.PtrToStructure<SteamNetworkingMessage_t>(messages[i]);
+                var message = messageProcessor.Process(
+                    steamMessage.m_conn.m_HSteamNetConnection,
+                    steamMessage.GetNetworkMessageHandle()
+                );
+                if (message != null)
+                    CommandReceived?.Invoke(message.Command);
+            } catch (Exception exception) {
+                log.Error($"Failed to process received message: {exception}");
+            } finally {
+                SteamNetworkingMessage_t.Release(messages[i]);
+            }
         }
     }
 

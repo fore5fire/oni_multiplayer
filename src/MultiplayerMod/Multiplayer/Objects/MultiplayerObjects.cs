@@ -5,6 +5,7 @@ using MultiplayerMod.Core.Dependency;
 using MultiplayerMod.Core.Events;
 using MultiplayerMod.Game;
 using MultiplayerMod.Multiplayer.CoreOperations.Events;
+using MultiplayerMod.Multiplayer.Objects.Reference;
 using MultiplayerMod.Multiplayer.World;
 
 namespace MultiplayerMod.Multiplayer.Objects;
@@ -47,6 +48,15 @@ public class MultiplayerObjects {
     public void RemoveObject(object instance) => index.Remove(instance);
 
     public T? Get<T>(MultiplayerId id) => !index.TryGetInstance(id, out var instance) ? default : (T) instance!;
+
+    /// <summary>
+    /// Resolves an object by id, throwing <see cref="ObjectNotFoundException"/> (which command execution
+    /// tolerates and logs) when absent — instead of a null that callers dereference into a NullReferenceException.
+    /// </summary>
+    public T GetOrThrow<T>(MultiplayerId id) =>
+        index.TryGetInstance(id, out var instance)
+            ? (T) instance!
+            : throw new ObjectNotFoundException(new MultiplayerIdReference(id));
 
     public MultiplayerObject? Get(object instance) => !index.TryGetObject(instance, out var @object) ? null : @object;
 

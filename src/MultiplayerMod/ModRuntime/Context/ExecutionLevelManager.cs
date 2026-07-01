@@ -10,11 +10,18 @@ public class ExecutionLevelManager {
     private static readonly Core.Logging.Logger log = LoggerFactory.GetLogger<ExecutionLevelManager>();
     private readonly ExecutionContextManager contextManager;
 
+    /// <summary>
+    /// Raised after <see cref="BaseLevel"/> changes. Consumers (e.g. deferred command replay) use this to react
+    /// to the base level reaching <see cref="ExecutionLevel.Game"/>.
+    /// </summary>
+    public event System.Action<ExecutionLevel>? BaseLevelChanged;
+
     public ExecutionLevel BaseLevel {
         get => contextManager.BaseContext.Level;
         set {
             log.Trace(() => $"Changing base execution level to {value}");
             contextManager.BaseContext = new ExecutionContext(value);
+            BaseLevelChanged?.Invoke(value);
         }
     }
 

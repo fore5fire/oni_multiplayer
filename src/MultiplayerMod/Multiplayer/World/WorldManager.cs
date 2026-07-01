@@ -31,6 +31,14 @@ public class WorldManager {
     private readonly ExecutionLevelManager executionLevelManager;
     private readonly List<IWorldStateManager> worldStateManagers;
 
+    // One-shot event subscriptions are tracked so a new sync/load supersedes any still-pending one. Without this,
+    // near-simultaneous syncs (e.g. a join racing an autosave) stack subscriptions and fire them all on a single
+    // load — running LoadState (and registering chores) more than once, and sending spurious ResumeGame.
+    private EventSubscription? syncResumeSubscription;
+    private EventSubscription? syncStatusSubscription;
+    private EventSubscription? loadOverlaySubscription;
+    private EventSubscription? loadStateSubscription;
+
     public WorldManager(
         IMultiplayerServer server,
         MultiplayerGame multiplayer,
@@ -62,23 +70,27 @@ public class WorldManager {
         var world = new WorldSave(WorldName, GetWorldSave(), new WorldState());
         worldStateManagers.ForEach(it => it.SaveState(world.State));
         server.Send(new LoadWorld(world));
-        events.Subscribe<PlayersReadyEvent>(
+        syncResumeSubscription?.Cancel();
+        syncResumeSubscription = events.Subscribe<PlayersReadyEvent>(
             (_, subscription) => {
                 if (resume)
                     server.SendAll(new ResumeGame());
                 subscription.Cancel();
+                syncResumeSubscription = null;
             }
         );
     }
 
     private void SetupStatusOverlay() {
         MultiplayerStatusOverlay.Show("Waiting for players...");
-        events.Subscribe<PlayerStateChangedEvent>(
+        syncStatusSubscription?.Cancel();
+        syncStatusSubscription = events.Subscribe<PlayerStateChangedEvent>(
             (_, subscription) => {
                 var players = multiplayer.Players;
                 if (players.Ready) {
                     MultiplayerStatusOverlay.Close();
                     subscription.Cancel();
+                    syncStatusSubscription = null;
                 }
                 var readyPlayersCount = players.Count(it => it.State == PlayerState.Ready);
                 var playerList = string.Join("\n", players.Select(it => $"{it.Profile.PlayerName}: {it.State}"));
@@ -90,15 +102,21 @@ public class WorldManager {
 
     public void RequestWorldLoad(WorldSave world) {
         MultiplayerStatusOverlay.Show($"Loading {world.Name}...");
-        events.Subscribe<PlayersReadyEvent>(
+        loadOverlaySubscription?.Cancel();
+        loadOverlaySubscription = events.Subscribe<PlayersReadyEvent>(
             (_, subscription) => {
                 MultiplayerStatusOverlay.Close();
                 subscription.Cancel();
+                loadOverlaySubscription = null;
             }
         );
-        events.Subscribe<WorldStateInitializingEvent>((_, subscription) => {
+        // Supersede any pending load's state handler so a duplicate LoadWorld can't run LoadState twice
+        // (which would register the saved chores/objects twice).
+        loadStateSubscription?.Cancel();
+        loadStateSubscription = events.Subscribe<WorldStateInitializingEvent>((_, subscription) => {
             worldStateManagers.ForEach(it => it.LoadState(world.State));
             subscription.Cancel();
+            loadStateSubscription = null;
         });
         scheduler.Run(() => LoadWorldSave(world.Name, world.Data));
     }

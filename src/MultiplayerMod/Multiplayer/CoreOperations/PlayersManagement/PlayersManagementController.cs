@@ -100,8 +100,12 @@ public class PlayersManagementController {
     }
 
     private void OnClientDisconnected(IMultiplayerClientId clientId) {
-        if (!identities.TryGetValue(clientId, out var playerId))
-            throw new PlayersManagementException($"No associated player found for client {clientId}");
+        // A client can disconnect before it ever completed initialization (connect then drop), so having no
+        // associated player is expected — log and ignore rather than throwing out of the disconnect handler.
+        if (!identities.TryGetValue(clientId, out var playerId)) {
+            log.Warning($"Disconnected client {clientId} had no associated player (never initialized)");
+            return;
+        }
 
         var player = multiplayer.Players[playerId];
         server.SendAll(new RemovePlayerCommand(player.Id));

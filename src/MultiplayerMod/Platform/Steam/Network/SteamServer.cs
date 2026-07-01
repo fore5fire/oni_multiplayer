@@ -114,7 +114,11 @@ public class SteamServer : IMultiplayerServer {
     }
 
     public void Send(IMultiplayerClientId clientId, IMultiplayerCommand command) {
-        var connections = new SingletonCollection<HSteamNetConnection>(clients[clientId]);
+        if (!clients.TryGetValue(clientId, out var connection)) {
+            log.Warning($"Cannot send {command} to unknown or disconnected client {clientId}");
+            return;
+        }
+        var connections = new SingletonCollection<HSteamNetConnection>(connection);
         SendCommand(command, MultiplayerCommandOptions.None, connections);
     }
 
@@ -210,22 +214,29 @@ public class SteamServer : IMultiplayerServer {
         var messages = new IntPtr[128];
         var messagesCount = SteamGameServerNetworkingSockets.ReceiveMessagesOnPollGroup(pollGroup, messages, 128);
         for (var i = 0; i < messagesCount; i++) {
-            var steamMessage = Marshal.PtrToStructure<SteamNetworkingMessage_t>(messages[i]);
-            var message = messageProcessor.Process(
-                steamMessage.m_conn.m_HSteamNetConnection,
-                steamMessage.GetNetworkMessageHandle()
-            );
-            if (message != null) {
-                IMultiplayerClientId id = new SteamMultiplayerClientId(steamMessage.m_identityPeer.GetSteamID());
-                var configuration = commands.GetCommandConfiguration(message.Command.GetType());
-                if (configuration.ExecuteOnServer) {
-                    CommandReceived?.Invoke(id, message.Command);
-                } else {
-                    var connections = clients.Where(it => !it.Key.Equals(id)).Select(it => it.Value);
-                    SendCommand(message.Command, message.Options, connections);
+            // Isolate each message: one faulty command must not abort the rest of the batch or leak the native
+            // message (Release must always run).
+            try {
+                var steamMessage = Marshal.PtrToStructure<SteamNetworkingMessage_t>(messages[i]);
+                var message = messageProcessor.Process(
+                    steamMessage.m_conn.m_HSteamNetConnection,
+                    steamMessage.GetNetworkMessageHandle()
+                );
+                if (message != null) {
+                    IMultiplayerClientId id = new SteamMultiplayerClientId(steamMessage.m_identityPeer.GetSteamID());
+                    var configuration = commands.GetCommandConfiguration(message.Command.GetType());
+                    if (configuration.ExecuteOnServer) {
+                        CommandReceived?.Invoke(id, message.Command);
+                    } else {
+                        var connections = clients.Where(it => !it.Key.Equals(id)).Select(it => it.Value);
+                        SendCommand(message.Command, message.Options, connections);
+                    }
                 }
+            } catch (Exception exception) {
+                log.Error($"Failed to process received message: {exception}");
+            } finally {
+                SteamNetworkingMessage_t.Release(messages[i]);
             }
-            SteamNetworkingMessage_t.Release(messages[i]);
         }
     }
 
@@ -291,15 +302,18 @@ public class SteamServer : IMultiplayerServer {
     }
 
     private void CloseConnection(HSteamNetConnection connection, CSteamID clientSteamId) {
-        ClientDisconnected?.Invoke(new SteamMultiplayerClientId(clientSteamId));
+        // Close and remove the connection BEFORE notifying: the handler may fail (e.g. a client that dropped
+        // before initializing), and it must not leave a dead connection in the map that future sends target.
+        var id = new SteamMultiplayerClientId(clientSteamId);
         SteamGameServerNetworkingSockets.CloseConnection(
             connection,
             (int) k_ESteamNetConnectionEnd_App_Generic,
             null,
             false
         );
-        clients.Remove(new SteamMultiplayerClientId(clientSteamId));
+        clients.Remove(id);
         Debug.Log($"Connection closed for {clientSteamId}");
+        ClientDisconnected?.Invoke(id);
     }
 
 }

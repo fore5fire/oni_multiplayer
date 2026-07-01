@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Runtime.Serialization.Formatters.Binary;
 using MultiplayerMod.Core.Logging;
 using static MultiplayerMod.Platform.Steam.Network.Configuration;
 
@@ -87,7 +86,9 @@ public class NetworkMessageProcessor {
 
             watchdog.Enabled = false;
             using var stream = new MemoryStream(buffer);
-            return (NetworkMessage) new BinaryFormatter().Deserialize(stream);
+            // Must use the surrogate-configured formatter — a bare BinaryFormatter throws on surrogate-only
+            // game types, which is exactly what large (fragmented) payloads like LoadWorld carry.
+            return (NetworkMessage) NetworkSerializer.CreateFormatter().Deserialize(stream);
         }
     }
 

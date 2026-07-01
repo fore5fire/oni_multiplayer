@@ -125,11 +125,17 @@ public static class ObjectEvents {
     // ReSharper disable once UnusedMember.Local
     private static void ObjectEventsPrefix() => Execution.EnterLevelSection(ExecutionLevel.Component);
 
-    [HarmonyPostfix]
+    // Finalizer (not postfix) so the Component section entered in the prefix is left even when the patched method
+    // throws — a leaked entry would corrupt the execution-context stack and disable command production for the
+    // rest of the session. The event is produced only when the original method completed successfully.
+    [HarmonyFinalizer]
     // ReSharper disable once UnusedMember.Local
-    private static void ObjectEventsPostfix(object __instance, MethodBase __originalMethod, object[] __args) {
+    private static void ObjectEventsFinalizer(
+        Exception? __exception, object __instance, MethodBase __originalMethod, object[] __args
+    ) {
         Execution.LeaveLevelSection();
-        ProcessObjectEvent(__instance, __originalMethod, __args);
+        if (__exception == null)
+            ProcessObjectEvent(__instance, __originalMethod, __args);
     }
 
     [RequireExecutionLevel(ExecutionLevel.Game)]

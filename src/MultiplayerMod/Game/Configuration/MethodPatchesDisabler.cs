@@ -27,8 +27,10 @@ public static class MethodPatchesDisabler {
     [RequireExecutionLevel(ExecutionLevel.Multiplayer)]
     private static void BeforeMethod() => Execution.EnterLevelSection(ExecutionLevel.Component);
 
+    // Finalizer (not postfix) so the level section is left even if the patched method throws. The Component-level
+    // gate keeps this balanced with the Multiplayer-gated prefix: it only leaves when the prefix actually entered.
     // ReSharper disable once UnusedMember.Local
-    [HarmonyPostfix]
+    [HarmonyFinalizer]
     [RequireExecutionLevel(ExecutionLevel.Component)]
     private static void AfterMethod() => Execution.LeaveLevelSection();
 
