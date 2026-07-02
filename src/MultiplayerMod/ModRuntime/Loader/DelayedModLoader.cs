@@ -58,11 +58,28 @@ public class DelayedModLoader {
 
     private void PrioritizedPatch() => AccessTools.GetTypesFromAssembly(modAssembly)
         .Where(it => it.GetCustomAttribute<HarmonyManualAttribute>() == null)
-        .Select(TryCreateClassProcessor)
-        .NotNull()
-        .Where(it => it.containerAttributes != null)
-        .OrderByDescending(it => it.containerAttributes.priority)
-        .ForEach(it => it.Patch());
+        // Only types that explicitly declare [HarmonyPatch] are real patch classes. Harmony 2.4.2 broadened its
+        // convention-based auxiliary-method detection, so helper/stub types that merely inherit a method named
+        // Prepare/Cleanup/TargetMethod (e.g. our StateMachine.Parameter.Context subclasses inherit a virtual
+        // Cleanup()) would otherwise be misdetected as patch containers and fail to "patch". Requiring the
+        // attribute restores the pre-2.4.2 behavior and is future-proof against other stub types.
+        .Where(it => it.GetCustomAttributes(typeof(HarmonyPatch), false).Length > 0)
+        .Select(type => (type, processor: TryCreateClassProcessor(type)))
+        .Where(it => it.processor?.containerAttributes != null)
+        .OrderByDescending(it => it.processor!.containerAttributes.priority)
+        .ForEach(it => TryPatch(it.type, it.processor!));
+
+    // A single patch failing (e.g. a transpiler that no longer matches an updated game method, or a target that
+    // moved) must not abort the remaining patches or, worse, propagate out of OnLoad into the game's launch
+    // sequence — that bricks the whole game instead of degrading one feature. Catch per-patch, log loudly, and
+    // continue so the rest of the mod still loads and the failure is diagnosable from a booted game.
+    private void TryPatch(Type type, PatchClassProcessor processor) {
+        try {
+            processor.Patch();
+        } catch (Exception exception) {
+            log.Error($"Failed to apply patch {type.FullName}; feature disabled\n{exception}");
+        }
+    }
 
     private PatchClassProcessor? TryCreateClassProcessor(Type type) {
         var optional = type.GetCustomAttribute<HarmonyOptionalAttribute>() != null;

@@ -82,11 +82,11 @@ public class PatchTargetResolver {
         throw new Exception(message);
     }
 
+    private const BindingFlags MethodFlags =
+        BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance;
+
     private MethodBase? GetMethod(Type type, string methodName, Type? interfaceType) {
-        var methodInfo = type.GetMethod(
-            methodName,
-            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance
-        );
+        var methodInfo = GetSingleMethod(type, methodName);
         if (methodInfo != null)
             return methodInfo;
 
@@ -94,11 +94,28 @@ public class PatchTargetResolver {
             return null;
 
         // Some overrides names prefixed by interface e.g. Clinic#ISliderControl.SetSliderValue
-        methodInfo = type.GetMethod(
-            interfaceType.Name + "." + methodName,
-            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance
-        );
-        return methodInfo;
+        return GetSingleMethod(type, interfaceType.Name + "." + methodName);
+    }
+
+    // Type.GetMethod(name, flags) throws AmbiguousMatchException when the game has added an overload of a targeted
+    // method (common across ONI updates). Rather than aborting the whole resolve, disambiguate: prefer the method
+    // declared directly on this type over inherited ones, and log the candidates so an intentional overload choice
+    // can be made if the wrong one is picked.
+    private MethodBase? GetSingleMethod(Type type, string methodName) {
+        try {
+            return type.GetMethod(methodName, MethodFlags);
+        } catch (AmbiguousMatchException) {
+            var candidates = type.GetMethods(MethodFlags).Where(it => it.Name == methodName).ToList();
+            var declaredHere = candidates.Where(it => it.DeclaringType == type).ToList();
+            var chosen = (declaredHere.Count > 0 ? declaredHere : candidates)
+                .OrderBy(it => it.GetParameters().Length)
+                .First();
+            log.Warning(
+                $"Ambiguous match for {type}.{methodName}; {candidates.Count} overloads " +
+                $"[{string.Join(" | ", candidates.Select(it => it.ToString()))}], patching {chosen}"
+            );
+            return chosen;
+        }
     }
 
     private MethodBase? GetSetter(Type type, string propertyName, Type? interfaceType) {
