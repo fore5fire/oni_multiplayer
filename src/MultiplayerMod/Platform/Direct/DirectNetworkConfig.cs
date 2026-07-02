@@ -30,6 +30,11 @@ public static class DirectNetworkConfig {
     public static bool DirectTransportSelected =>
         string.Equals(Get("TRANSPORT"), "direct", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>When set (<c>SELFTEST=true</c>), runs an automated in-process loopback transport test on
+    /// startup and logs the result — lets the transport be validated with no UI, world, or second machine.</summary>
+    public static bool SelfTest =>
+        string.Equals(Get("SELFTEST"), "true", StringComparison.OrdinalIgnoreCase);
+
     public static int Port {
         get {
             var raw = Get("PORT");
