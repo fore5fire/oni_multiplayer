@@ -30,7 +30,10 @@ public class DelayedModLoader {
         var builder = new DependencyContainerBuilder()
             .AddSingleton(harmony)
             .AddType<EventDispatcher>()
-            .ScanAssembly(modAssembly);
+            // Filtered so only the selected transport's platform types register (Steam by default; the direct
+            // LAN transport when MP_TRANSPORT=direct). Registering both would make IMultiplayerServer/Client
+            // ambiguous. See PlatformSelection.
+            .ScanAssembly(modAssembly, Platform.PlatformSelection.IncludeInDependencyScan);
         PrioritizedPatch();
         modAssembly.GetTypes()
             .Where(type => typeof(IModComponentConfigurer).IsAssignableFrom(type) && type.IsClass)

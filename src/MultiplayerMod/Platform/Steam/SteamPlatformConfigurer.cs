@@ -14,6 +14,11 @@ public class SteamPlatformConfigurer : IModComponentConfigurer {
     private readonly Core.Logging.Logger log = LoggerFactory.GetLogger<SteamPlatformConfigurer>();
 
     public void Configure(DependencyContainerBuilder builder) {
+        // Component configurers are discovered independently of the DI scan filter, so this still runs when the
+        // direct transport is selected — bail out to avoid wiring Steam lobby handling in that mode.
+        if (PlatformSelection.DirectSelected)
+            return;
+
         var steam = DistributionPlatform.Inst.Platform == "Steam";
         if (!steam)
             return;
