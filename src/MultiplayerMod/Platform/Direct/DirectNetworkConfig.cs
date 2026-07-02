@@ -35,6 +35,16 @@ public static class DirectNetworkConfig {
     public static bool SelfTest =>
         string.Equals(Get("SELFTEST"), "true", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>When set (<c>AUTOHOST=true</c>), auto-loads the newest save in host mode at the main menu — no
+    /// UI. For unattended two-machine testing: this box hosts.</summary>
+    public static bool AutoHost =>
+        string.Equals(Get("AUTOHOST"), "true", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>When set (<c>AUTOJOIN=true</c>), auto-connects to <see cref="Host"/> at the main menu — no UI.
+    /// For unattended two-machine testing: this box joins.</summary>
+    public static bool AutoJoin =>
+        string.Equals(Get("AUTOJOIN"), "true", StringComparison.OrdinalIgnoreCase);
+
     public static int Port {
         get {
             var raw = Get("PORT");

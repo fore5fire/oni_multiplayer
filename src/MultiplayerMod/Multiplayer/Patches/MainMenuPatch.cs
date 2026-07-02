@@ -31,6 +31,12 @@ internal static class MainMenuPatch {
             highlight: false,
             () => UseMultiplayerMode(MultiplayerMode.Client, operations.Join)
         );
+
+        // Unattended two-machine testing: with the direct transport and AUTOHOST/AUTOJOIN configured, drive the
+        // host/join flow automatically once the menu is up — no button clicks.
+        if (Platform.PlatformSelection.DirectSelected &&
+            (Platform.Direct.DirectNetworkConfig.AutoHost || Platform.Direct.DirectNetworkConfig.AutoJoin))
+            Core.Unity.UnityObject.CreateStaticWithComponent<Platform.Direct.Network.Components.DirectAutoConnectComponent>();
     }
 
     [HarmonyPrefix]
