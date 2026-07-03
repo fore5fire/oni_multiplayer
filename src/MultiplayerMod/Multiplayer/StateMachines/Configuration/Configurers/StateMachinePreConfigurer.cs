@@ -30,13 +30,12 @@ public class StateMachinePreConfigurer<TStateMachine, TStateMachineInstance, TMa
     ) => rootConfigurer.PostConfigure(action);
 
     public void Suppress(Expression<System.Action> expression) {
-        var (state, method) = ExtractMethodCallInfo(expression);
-        var scope = typeof(TStateMachine).GetMethod(nameof(StateMachine.InitializeStates))!;
-        rootConfigurer.AddAction(
-            ControlFlowApply,
-            _ => customizer.Detour(state, method, state, new MethodBoundedDetour(scope))
-        );
-        rootConfigurer.AddAction(ControlFlowReset, _ => customizer.Reset(state));
+        // TEMPORARILY DISABLED (diagnosis/unblock). The old mechanism Harmony-patched a shared generic
+        // GameStateMachine.State method (ToggleChore/Transition/MoveTo/Enter/...). Mono shares that native code
+        // across all instantiations, so the patch fired for every state machine and Harmony's return-value
+        // writeback cast the routed result to the wrong instantiation -> InvalidCastException storm on client
+        // world-load. To be replaced with an InitializeStates transpiler that guards the specific call sites.
+        _ = expression;
     }
 
     private StateMachine.BaseState ExtractStateInstance(MemberExpression memberExpression) {
