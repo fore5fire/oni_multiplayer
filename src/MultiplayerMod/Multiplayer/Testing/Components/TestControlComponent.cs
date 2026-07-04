@@ -152,7 +152,7 @@ public class TestControlComponent : MultiplayerMonoBehaviour {
         var materials = def.DefaultElements().ToArray();
         var priority = new PrioritySetting(PriorityScreen.PriorityClass.basic, 5);
         var buildArgs = new Game.UI.Tools.Events.BuildEventArgs(
-            cells[0], def.PrefabID, InstantBuild: true, Upgrade: false, orientation, materials, "", priority
+            cells[0], def.PrefabID, InstantBuild: true, Upgrade: false, orientation, materials, null!, priority
         );
         new MultiplayerMod.Multiplayer.Commands.Tools.Build(buildArgs).Execute(null!);
         Dependencies.Get<IMultiplayerClient>().Send(new MultiplayerMod.Multiplayer.Commands.Tools.Build(buildArgs));
