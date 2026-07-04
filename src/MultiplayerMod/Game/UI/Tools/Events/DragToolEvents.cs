@@ -12,6 +12,15 @@ public static class DragToolEvents {
 
     public static event EventHandler<DragCompleteEventArgs>? DragComplete;
 
+    /// <summary>
+    /// Test hook for the control harness: finalize a drag assembled via direct <see cref="DragTool.OnDragTool"/>
+    /// calls, exactly as a real <c>OnDragComplete</c> would — build the args from the accumulated selection, fire
+    /// <see cref="DragComplete"/> (so the normal producer/binder sends the command), and reset. Must be called at
+    /// <c>ExecutionLevel.Game</c> (the default during gameplay), like a genuine drag.
+    /// </summary>
+    public static void FinishDrag(DragTool tool, Vector3 down, Vector3 up) =>
+        OnDragCompletePatch.CompleteDrag(tool, down, up);
+
     private static DragTool? lastTool;
     private static readonly List<int> selection = new();
 
@@ -89,7 +98,7 @@ public static class DragToolEvents {
             CompleteDrag(__instance, __0, __1);
 
         [RequireExecutionLevel(ExecutionLevel.Game)]
-        private static void CompleteDrag(DragTool instance, Vector3 cursorDown, Vector3 cursorUp) {
+        internal static void CompleteDrag(DragTool instance, Vector3 cursorDown, Vector3 cursorUp) {
             AssertSameInstance(instance);
 
             var args = new DragCompleteEventArgs(

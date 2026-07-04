@@ -45,6 +45,20 @@ public static class DirectNetworkConfig {
     public static bool AutoJoin =>
         string.Equals(Get("AUTOJOIN"), "true", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>When set (<c>TESTCONTROL=true</c>), starts a local TCP control server (see the test-control
+    /// harness) that injects real gameplay actions (dig/cancel/…) and answers state queries — lets sync be
+    /// exercised across many scenarios with no manual mouse input.</summary>
+    public static bool TestControl =>
+        string.Equals(Get("TESTCONTROL"), "true", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>TCP port the test-control server listens on (<c>TESTPORT</c>, default 27200).</summary>
+    public static int TestPort {
+        get {
+            var raw = Get("TESTPORT");
+            return int.TryParse(raw, out var port) && port is > 0 and <= 65535 ? port : 27200;
+        }
+    }
+
     public static int Port {
         get {
             var raw = Get("PORT");
