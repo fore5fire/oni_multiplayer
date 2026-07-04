@@ -11,7 +11,13 @@ public class ReleaseChoreDriver(ChoreDriver driver) : MultiplayerCommand {
     private readonly ComponentReference<ChoreDriver> driverReference = driver.GetReference();
 
     public override void Execute(MultiplayerCommandContext context) {
-        var driver = driverReference.Resolve();
+        // The driver may be absent on this client under sim divergence; nothing to release then.
+        ChoreDriver driver;
+        try {
+            driver = driverReference.Resolve();
+        } catch (Exception) {
+            return;
+        }
         context.Dependencies.Get<MultiplayerDriverChores>().Release(driver);
     }
 

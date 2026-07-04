@@ -17,13 +17,14 @@ public class SetDriverChore(ChoreDriver driver, ChoreConsumer consumer, Chore ch
     private object? data = ArgumentUtils.WrapObject(data);
 
     public override void Execute(MultiplayerCommandContext context) {
-        var chore = choreReference.Resolve();
-        var driver = driverReference.Resolve();
-        Chore.Precondition.Context choreContext;
-
         // TODO: A temporary solution until all chores are synced.
-        // TODO: Now there can be a case when a consumer doesn't have required components.
+        // Any of the referenced objects (chore/driver/consumer) may be absent or missing components on this
+        // client under sim divergence — resolve them all defensively and skip if anything is unavailable.
+        ChoreDriver driver;
+        Chore.Precondition.Context choreContext;
         try {
+            var chore = choreReference.Resolve();
+            driver = driverReference.Resolve();
             choreContext = new Chore.Precondition.Context(
                 chore,
                 new ChoreConsumerState(consumerReference.Resolve()),
@@ -31,7 +32,7 @@ public class SetDriverChore(ChoreDriver driver, ChoreConsumer consumer, Chore ch
                 ArgumentUtils.UnWrapObject(data)
             );
         } catch (Exception exception) {
-            log.Warning($"Unable to create chore context:\n{exception.StackTrace}");
+            log.Warning($"Unable to set driver chore (object unavailable on this client): {exception.Message}");
             return;
         }
         context.Dependencies.Get<MultiplayerDriverChores>().Set(driver, ref choreContext);

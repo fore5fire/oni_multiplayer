@@ -32,10 +32,22 @@ public class MultiplayerDriverChores {
         MultiplayerDriverChores.objects = objects;
     }
 
-    private bool Busy(ref Chore.Precondition.Context context) => driversAvailability.TryGetValue(
-        context.consumerState.choreDriver,
-        out var result
-    ) && result.Value;
+    private bool Busy(ref Chore.Precondition.Context context) {
+        var driver = context.consumerState.choreDriver;
+        if (!driversAvailability.TryGetValue(driver, out var result) || !result.Value)
+            return false;
+
+        // Self-heal: a driver flagged busy but with no active chore is stuck — the host chore it was mirroring
+        // ended or was cancelled without a ReleaseChoreDriver reaching us (e.g. sim divergence: the host built
+        // something this client's duplicant couldn't, then it was cancelled). Free it so the duplicant doesn't
+        // idle forever "busy with a host chore". A subsequent SetDriverChore re-locks it if the host is still
+        // driving.
+        if (driver.GetCurrentChore() == null) {
+            result.Value = false;
+            return false;
+        }
+        return true;
+    }
 
     public void Set(ChoreDriver driver, ref Chore.Precondition.Context context) {
         var busy = driversAvailability.GetValue(driver, _ => new BoxedValue<bool>(true));
