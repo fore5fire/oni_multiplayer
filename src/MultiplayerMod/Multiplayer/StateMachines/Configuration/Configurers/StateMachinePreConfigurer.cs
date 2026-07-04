@@ -3,9 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using MultiplayerMod.Core.Patch.ControlFlow;
-using MultiplayerMod.Core.Patch.ControlFlow.Evaluators;
-using MultiplayerMod.ModRuntime.StaticCompatibility;
 using static MultiplayerMod.Multiplayer.StateMachines.Configuration.StateMachineConfigurationPhase;
 
 namespace MultiplayerMod.Multiplayer.StateMachines.Configuration.Configurers;
@@ -20,8 +17,6 @@ public class StateMachinePreConfigurer<TStateMachine, TStateMachineInstance, TMa
     where TMaster : IStateMachineTarget
 {
 
-    private readonly ControlFlowCustomizer customizer = Dependencies.Get<ControlFlowCustomizer>();
-
     private readonly StateMachineRootConfigurer<TStateMachine, TStateMachineInstance, TMaster, TDef> rootConfigurer =
         root;
 
@@ -29,13 +24,23 @@ public class StateMachinePreConfigurer<TStateMachine, TStateMachineInstance, TMa
         Action<StateMachinePostConfigurer<TStateMachine, TStateMachineInstance, TMaster, TDef>> action
     ) => rootConfigurer.PostConfigure(action);
 
+    /// <summary>
+    /// Suppresses a specific fluent-State call (e.g. <c>state.ToggleChore(...)</c>) for the duration of this state
+    /// machine's <c>InitializeStates</c>. The call site is guarded at patch time by
+    /// <see cref="StateCallSuppressionTranspiler"/>; here we register the exact <c>(state instance, method name)</c>
+    /// so only that call is skipped (leaving the receiver for chaining). Replaces the old shared-generic Harmony
+    /// detour, which crashed on Mono (see <see cref="StateCallSuppressor"/>).
+    /// </summary>
     public void Suppress(Expression<System.Action> expression) {
-        // TEMPORARILY DISABLED (diagnosis/unblock). The old mechanism Harmony-patched a shared generic
-        // GameStateMachine.State method (ToggleChore/Transition/MoveTo/Enter/...). Mono shares that native code
-        // across all instantiations, so the patch fired for every state machine and Harmony's return-value
-        // writeback cast the routed result to the wrong instantiation -> InvalidCastException storm on client
-        // world-load. To be replaced with an InitializeStates transpiler that guards the specific call sites.
-        _ = expression;
+        var (state, method) = ExtractMethodCallInfo(expression);
+        if (!StateCallSuppressionTranspiler.GuardedMethods.Contains(method.Name))
+            throw new InvalidStateExpressionException(
+                $"Suppress target '{method.Name}' is not guarded by the InitializeStates transpiler. " +
+                $"Add it to {nameof(StateCallSuppressionTranspiler)}.{nameof(StateCallSuppressionTranspiler.GuardedMethods)}."
+            );
+        var name = method.Name;
+        rootConfigurer.AddAction(ControlFlowApply, _ => StateCallSuppressor.Suppress(state, name));
+        rootConfigurer.AddAction(ControlFlowReset, _ => StateCallSuppressor.Reset(state, name));
     }
 
     private StateMachine.BaseState ExtractStateInstance(MemberExpression memberExpression) {

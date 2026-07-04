@@ -38,11 +38,14 @@ public class StateMachinesPatcher {
     private void OnRuntimeReady(RuntimeReadyEvent @event) {
         var prefix = new HarmonyMethod(SymbolExtensions.GetMethodInfo(() => InitializeStatesPrefix(null!)));
         var postfix = new HarmonyMethod(SymbolExtensions.GetMethodInfo(() => InitializeStatesPostfix(null!)));
+        var transpiler = new HarmonyMethod(
+            AccessTools.Method(typeof(StateCallSuppressionTranspiler), nameof(StateCallSuppressionTranspiler.Transpile))
+        );
         configurers.ForEach(it => it.Configure(context));
         runners = context.Configurations.ToDictionary(it => it.StateMachineType, it => new Runner(it));
         runners.Keys
             .Select(it => it.GetMethod(nameof(StateMachine.InitializeStates)))
-            .ForEach(it => harmony.CreateProcessor(it).AddPrefix(prefix).AddPostfix(postfix).Patch());
+            .ForEach(it => harmony.CreateProcessor(it).AddPrefix(prefix).AddPostfix(postfix).AddTranspiler(transpiler).Patch());
         context.Lock();
         var types = context.Configurations.Select(it => it.StateMachineType).ToArray();
         log.Info($"{types.Length} state machine types patched:\n\t{string.Join("\n\t", types.Select(it => it.GetSignature()))}");
