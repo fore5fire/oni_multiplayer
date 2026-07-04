@@ -11,6 +11,7 @@ using MultiplayerMod.Core.Logging;
 using MultiplayerMod.Core.Unity;
 using MultiplayerMod.Game.UI.Tools.Events;
 using MultiplayerMod.ModRuntime.StaticCompatibility;
+using MultiplayerMod.Network;
 using MultiplayerMod.Platform.Direct;
 using UnityEngine;
 
@@ -105,13 +106,57 @@ public class TestControlComponent : MultiplayerMonoBehaviour {
             "stat" => Stat(),
             "hash" => Hash(),
             "speed" => Speed(args),
+            "sync" => Sync(),
             "dig" => DragAction<DigTool>(args),
             "cancel" => DragAction<CancelTool>(args),
+            "deconstruct" => DragAction<DeconstructTool>(args),
+            "prioritize" => DragAction<PrioritizeTool>(args),
+            "sweep" => DragAction<ClearTool>(args),
+            "mop" => DragAction<MopTool>(args),
+            "disinfect" => DragAction<DisinfectTool>(args),
+            "harvest" => DragAction<HarvestTool>(args),
+            "emptypipe" => DragAction<EmptyPipeTool>(args),
+            "disconnect" => DragAction<DisconnectTool>(args),
+            "build" => BuildAction(args),
             "count" => Count(args),
-            "help" => "commands: ping | stat | hash | speed 0|1|2|3 | dig x,y [x,y...] | " +
-                      "cancel x,y... | count <ComponentType> | help",
+            "help" => "commands: ping | stat | hash | speed 0|1|2|3 | sync | " +
+                      "dig|cancel|deconstruct|prioritize|sweep|mop|disinfect|harvest|emptypipe|disconnect x,y... | " +
+                      "build <prefabId> x,y [orientation] | count <ComponentType> | help",
             _ => "error: unknown command '" + command + "'"
         };
+    }
+
+    /// <summary>Triggers a hard-sync (host only): saves the world and pushes it to clients, which reload and
+    /// realign — the mechanism that corrects accumulated physics-sim divergence.</summary>
+    private static string Sync() {
+        if (Dependencies.Get<MultiplayerGame>().Mode != MultiplayerMode.Host)
+            return "error: sync must run on the host";
+        Dependencies.Get<MultiplayerMod.Multiplayer.World.WorldManager>().Sync();
+        return "ok sync triggered";
+    }
+
+    /// <summary>Instant-builds a building on the host and replicates it (the exact Build command a placement
+    /// emits). Materials default to the building's defaults.</summary>
+    private static string BuildAction(string[] args) {
+        if (args.Length < 2)
+            return "error: build <prefabId> x,y [orientation]";
+        var def = Assets.GetBuildingDef(args[0]);
+        if (def == null)
+            return "error: unknown building '" + args[0] + "'";
+        var cells = ParseCells(new[] { args[1] });
+        if (cells.Count == 0)
+            return "error: bad cell";
+        var orientation = Orientation.Neutral;
+        if (args.Length >= 3)
+            Enum.TryParse(args[2], true, out orientation);
+        var materials = def.DefaultElements().ToArray();
+        var priority = new PrioritySetting(PriorityScreen.PriorityClass.basic, 5);
+        var buildArgs = new Game.UI.Tools.Events.BuildEventArgs(
+            cells[0], def.PrefabID, InstantBuild: true, Upgrade: false, orientation, materials, "", priority
+        );
+        new MultiplayerMod.Multiplayer.Commands.Tools.Build(buildArgs).Execute(null!);
+        Dependencies.Get<IMultiplayerClient>().Send(new MultiplayerMod.Multiplayer.Commands.Tools.Build(buildArgs));
+        return $"ok build {def.PrefabID} @{cells[0]}";
     }
 
     private static string Ping() {
@@ -170,6 +215,12 @@ public class TestControlComponent : MultiplayerMonoBehaviour {
         if (cells.Count == 0)
             return "error: no valid cells (expected x,y pairs)";
         var tool = new T();
+        // FilteredDragTools read currentFilters when finalizing; a fresh instance has none. Give it an
+        // "all layers" filter so the finalize step doesn't NPE and the tool acts on everything.
+        if (tool is FilteredDragTool filtered && filtered.currentFilters == null)
+            filtered.currentFilters = new[] {
+                new ToolParameterMenu.ToggleData(ToolParameterMenu.FILTERLAYERS.ALL, ToolParameterMenu.ToggleState.On, true)
+            };
         var down = Grid.CellToPosCCC(cells[0], Grid.SceneLayer.Move);
         var up = Grid.CellToPosCCC(cells[cells.Count - 1], Grid.SceneLayer.Move);
         tool.downPos = down;
