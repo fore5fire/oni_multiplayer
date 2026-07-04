@@ -27,6 +27,7 @@ public class DelayedModLoader {
     }
 
     public void OnLoad() {
+        log.Info($"Network transport: {(Platform.PlatformSelection.DirectSelected ? "Direct (LAN/IP)" : "Steam")}");
         var builder = new DependencyContainerBuilder()
             .AddSingleton(harmony)
             .AddType<EventDispatcher>()
