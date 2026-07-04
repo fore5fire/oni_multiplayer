@@ -23,7 +23,10 @@ public class SetParameterValue : MultiplayerCommand {
     }
 
     public override void Execute(MultiplayerCommandContext context) {
+        // The controller may exist on the client without this state machine instance (sim divergence); skip.
         var instance = controllerReference.Resolve().GetSMI(stateMachineInstanceType);
+        if (instance == null)
+            return;
         var parameterContext = instance.parameterContexts[parameterIndex];
         var parameterValue = ArgumentUtils.UnWrapObject(value);
         StateMachineContextRuntimeTools.Get(parameterContext).Set(instance, parameterValue);

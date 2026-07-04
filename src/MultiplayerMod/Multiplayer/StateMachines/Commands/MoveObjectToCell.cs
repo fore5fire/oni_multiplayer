@@ -35,7 +35,11 @@ public class MoveObjectToCell : MultiplayerCommand {
     }
 
     public override void Execute(MultiplayerCommandContext context) {
-        var runtime = StateMachineRuntimeTools.Get(reference.Resolve());
+        // See GoToState: the referenced state machine instance may be absent on the client under sim divergence.
+        var instance = reference.Resolve();
+        if (instance == null)
+            return;
+        var runtime = StateMachineRuntimeTools.Get(instance);
         runtime.FindParameter(TargetCell)?.Set(cell);
         runtime.GoToState(movingStateName);
     }

@@ -22,7 +22,12 @@ public class GoToState : MultiplayerCommand {
     }
 
     public override void Execute(MultiplayerCommandContext context) {
-        StateMachineRuntimeTools.Get(reference.Resolve()).GoToState(stateName);
+        // The client may not currently have this state machine instance (its object isn't in the same chore/state
+        // as the host — expected under ONI's non-deterministic sim). Nothing to transition; a hard-sync realigns.
+        var instance = reference.Resolve();
+        if (instance == null)
+            return;
+        StateMachineRuntimeTools.Get(instance).GoToState(stateName);
     }
 
 }
