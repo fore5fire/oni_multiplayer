@@ -102,10 +102,14 @@ public class TestControlComponent : MultiplayerMonoBehaviour {
         var args = parts.Skip(1).ToArray();
         return command switch {
             "ping" => Ping(),
+            "stat" => Stat(),
+            "hash" => Hash(),
+            "speed" => Speed(args),
             "dig" => DragAction<DigTool>(args),
             "cancel" => DragAction<CancelTool>(args),
             "count" => Count(args),
-            "help" => "commands: ping | dig x,y [x,y...] | cancel x,y... | count <ComponentType> | help",
+            "help" => "commands: ping | stat | hash | speed 0|1|2|3 | dig x,y [x,y...] | " +
+                      "cancel x,y... | count <ComponentType> | help",
             _ => "error: unknown command '" + command + "'"
         };
     }
@@ -114,6 +118,50 @@ public class TestControlComponent : MultiplayerMonoBehaviour {
         var mode = Dependencies.Get<MultiplayerGame>().Mode;
         var cycle = GameClock.Instance != null ? GameClock.Instance.GetCycle() : -1;
         return $"pong mode={mode} cycle={cycle}";
+    }
+
+    /// <summary>One-line snapshot for host/client comparison: mode, cycle, paused, dupes, buildings.</summary>
+    private static string Stat() {
+        var mode = Dependencies.Get<MultiplayerGame>().Mode;
+        var cycle = GameClock.Instance != null ? GameClock.Instance.GetCycle() : -1;
+        var paused = SpeedControlScreen.Instance != null && SpeedControlScreen.Instance.IsPaused;
+        var dupes = UnityEngine.Object.FindObjectsOfType(typeof(MinionIdentity)).Length;
+        var buildings = UnityEngine.Object.FindObjectsOfType(typeof(BuildingComplete)).Length;
+        return $"stat mode={mode} cycle={cycle} paused={paused} dupes={dupes} buildings={buildings}";
+    }
+
+    /// <summary>FNV-1a checksum over the per-cell element layout — a structural world fingerprint to compare
+    /// between host and client (matches = same solid/gas/liquid layout; digging/building changes it identically
+    /// on both when in sync).</summary>
+    private static string Hash() {
+        if (Grid.Element == null)
+            return "error: grid not ready";
+        var count = Grid.CellCount;
+        var hash = 14695981039346656037UL;
+        for (var i = 0; i < count; i++) {
+            hash ^= (ulong) (int) Grid.Element[i].id;
+            hash *= 1099511628211UL;
+        }
+        return $"hash cells={count} element={hash:x16}";
+    }
+
+    /// <summary>Injects a synced speed change through the real SpeedControlScreen (0=pause, 1..3=speed tiers), so
+    /// the mod's producer emits Pause/Resume/ChangeGameSpeed to clients — exactly like clicking the speed UI.</summary>
+    private static string Speed(string[] args) {
+        if (args.Length == 0 || !int.TryParse(args[0], out var level) || level < 0 || level > 3)
+            return "error: speed 0|1|2|3 (0=pause)";
+        var screen = SpeedControlScreen.Instance;
+        if (screen == null)
+            return "error: no speed control (not in game)";
+        if (level == 0) {
+            if (!screen.IsPaused)
+                screen.Pause();
+        } else {
+            screen.SetSpeed(level - 1);
+            if (screen.IsPaused)
+                screen.Unpause();
+        }
+        return $"ok speed={level} paused={screen.IsPaused}";
     }
 
     // ReSharper disable once Unity.IncorrectMonoBehaviourInstantiation
