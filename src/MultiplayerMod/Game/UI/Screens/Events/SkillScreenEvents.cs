@@ -19,9 +19,13 @@ public static class SkillScreenEvents {
         // ReSharper disable once UnusedMember.Local
         private static void OnHatDropEntryClick(SkillsScreen __instance, IListableOption skill, object data) {
             __instance.GetMinionIdentity(__instance.currentlySelectedMinion, out var minionIdentity, out _);
+            // The command must carry the hat resource id (e.g. "hat_role_mining1"), NOT GetProperName() (the
+            // localized display name). MinionResume.SetHats/AddHat look the id up in AccessorySlots.Hat; a display
+            // name resolves to null → "Missing hat" warning, a green-dot placeholder, and an NRE in AddHat for
+            // dupes that render via SymbolOverrideController. The game's own handler uses (skill as HatListable).hat.
             SetHat?.Invoke(
                 minionIdentity,
-                skill?.GetProperName()
+                (skill as HatListable)?.hat
             );
         }
 
@@ -37,7 +41,8 @@ public static class SkillScreenEvents {
         // ReSharper disable once UnusedMember.Local
         private static void OnHatDropEntryClick(SkillMinionWidget __instance, IListableOption hatOption, object data) {
             __instance.skillsScreen.GetMinionIdentity(__instance.assignableIdentity, out var minionIdentity, out _);
-            SetHat?.Invoke(minionIdentity, hatOption?.GetProperName());
+            // Send the hat resource id, not the display name — see the note in SkillsScreenEvents above.
+            SetHat?.Invoke(minionIdentity, (hatOption as HatListable)?.hat);
         }
 
     }
